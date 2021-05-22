@@ -1,9 +1,11 @@
+#include <iostream>
 #include <cstdint>
 #include <cstdlib>
 #include <initializer_list>
 #include <ncurses.h>
 #include <stack>
 #include <chrono>
+#include <thread>
 
 #define FONT_MEM_START 0
 
@@ -56,19 +58,31 @@ int main(int argc, char** argv)
 	initscr();
 	nodelay(stdscr, TRUE); 		// getch non-blocking
 	curs_set(0); 				// hide cursor
-	WINDOW* win = newwin(34, 66, 5, 5);
+	WINDOW* win = newwin(35, 70, 5, 5);
+	WINDOW* logwin = newwin(35, 70, 5, 80);
 	// Load font into RAM from address 0x00 - 0x50
 	LoadFont(Memory);
 
+	auto next_frame = std::chrono::steady_clock::now();
+
 	while(1)
 	{
+		next_frame += std::chrono::milliseconds(1000/60);
+
 		if(getch() == 113) { break; }
 		box(win, 0, 0);
+		box(logwin, 0, 0);
 		wrefresh(win);
+		wrefresh(logwin);
 		Draw(win);
+
+
+		std::this_thread::sleep_until(next_frame);
+
 	}
 
 	delwin(win);
+	delwin(logwin);
 	endwin();
 
 
