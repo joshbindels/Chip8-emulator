@@ -69,40 +69,116 @@ void Draw(WINDOW* win)
 {
     for(int i = 0; i<(64*32); i++)
     {
-        waddch(win, (Display[i] == 1) ? ACS_CKBOARD : ' ');
+        //waddch(win, (Display[i] == 1) ? ACS_CKBOARD : ' ');
+        waddch(win, (Display[i] == 1) ? ACS_BLOCK : ' ');
     }
     wmove(win, 0, 0);       // reset cursor
+}
+
+int translateKey(int k)
+{
+	switch(k)
+	{
+        case 49:
+            return 0x1;
+        case 50:
+            return 0x2;
+        case 51:
+            return 0x3;
+        case 52:
+            return 0xC;
+        case 113:
+            return 0x4;
+        case 119:
+            return 0x5;
+        case 101:
+            return 0x6;
+        case 111:
+            return 0xD;
+        case 97:
+            return 0x7;
+        case 115:
+            return 0x8;
+        case 100:
+            return 0x9;
+        case 102:
+            return 0xE;
+        case 122:
+            return 0xA;
+        case 120:
+            return 0x0;
+        case 99:
+            return 0xB;
+        case 118:
+            return 0xF;
+		default:
+			return 0x0;
+	}
 }
 
 int main(int argc, char** argv)
 {
     initscr();
     nodelay(stdscr, TRUE);      // getch non-blocking
+    noecho();
     curs_set(0);                // hide cursor
     WINDOW* win = newwin(32, 64, 5, 5);
     WINDOW* logwin = newwin(35, 70, 5, 80);
+    scrollok(logwin, true);
     // Load font into RAM from address 0x00 - 0x50
     LoadFont(Memory);
     LoadCh8Program(argv[1]);
     auto next_frame = std::chrono::steady_clock::now();
     bool drawFlag = false;
+    bool keyFlag = false;
+    int keyIndex = 0;
+    int keyCurrent = -1;
+    char* logstr = (char*)malloc(sizeof("123\n"));;
 
-    while(1)
+    bool run = true;
+    while(run)
     {
-        next_frame += std::chrono::milliseconds(1000/60);
+        next_frame += std::chrono::milliseconds(1000/2);
 
-        if(getch() == 113) { break; }
-        box(win, 0, 0);
+        int ch;
+        switch(ch = getch())
+        {
+            case -1:
+                break;
+            case 27: // escape
+                run = false;
+                continue;
+            default:
+                keyCurrent = ch;
+                sprintf(logstr, " %d\n", ch);
+                waddstr(logwin, logstr);
+                break;
+
+        }
+        //box(win, 0, 0);
         box(logwin, 0, 0);
         wrefresh(win);
         wrefresh(logwin);
+
         if(drawFlag) {
             Draw(win);
             drawFlag = false;
         }
 
-
+        if(keyFlag)
+        {
+            if(keyCurrent != -1)
+            {
+                V[keyIndex] = translateKey(keyCurrent);
+                keyFlag = false;
+                keyIndex = 0;
+                keyCurrent = -1;
+            }
+        }
+        else {
         uint16_t opcode = Memory[PC] << 8 | Memory[PC+1];
+        sprintf(logstr, "0x%x\n", opcode);
+        waddstr(logwin, logstr);
         PC += 2;
         switch((opcode & 0xF000) >> 12) // MSB
         {
@@ -199,13 +275,13 @@ int main(int argc, char** argv)
                         if((V[(opcode & 0xF00) >> 8] > V[(opcode & 0xF0) >> 4]))
                         {
                             // set underflow bit
-                            V[0xF] = 1;
+                            V[0xF] = 0;
                         }
                         else
                         {
-                            V[0xF] = 0;
+                            V[0xF] = 1;
                         }
-                        V[(opcode & 0xF00) >> 8] -= V[(opcode & 0xF0) >> 4];
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] - V[(opcode & 0xF0) >> 4] & 0xFF;
                         break;
                     case 0x6:
                         // Vx >>= 1 (0x8XY6)
@@ -217,13 +293,13 @@ int main(int argc, char** argv)
                         if((V[(opcode & 0xF0) >> 4] > V[(opcode & 0xF00) >> 8]))
                         {
                             // set underflow bit
-                            V[0xF] = 1;
+                            V[0xF] = 0;
                         }
                         else
                         {
-                            V[0xF] = 0;
+                            V[0xF] = 1;
                         }
-                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF0) >> 4] - V[(opcode & 0xF00) >> 8];
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF0) >> 4] - V[(opcode & 0xF00) >> 8] & 0xFF;
                         break;
                     case 0xE:
                         // Vx <<= 1 (0x8XYE)
@@ -282,11 +358,17 @@ int main(int argc, char** argv)
                 {
                     case 0x9E:
                         // key() == Vx (0xEX9E)
-                        //TODO
+                        if(keyCurrent == V[(opcode & 0xF00) >> 8])
+                        {
+                            PC += 2;
+                        }
                         break;
                     case 0xA1:
                         // key() != Vx (0xEXA1)
-                        //TODO
+                        if(keyCurrent != V[(opcode & 0xF00) >> 8])
+                        {
+                            PC += 2;
+                        }
                         break;
                 }
                 break;
@@ -298,8 +380,10 @@ int main(int argc, char** argv)
                         V[(opcode & 0xF00) >> 8] = DelayTimer;
                         break;
                     case 0x0A:
-                        // (0xFX0A)
-                        // TODO
+                        // Vx = get_key() blocking (0xFX0A)
+                        // TODO: this is very ugly, clean it up
+                        keyFlag = true;
+                        keyIndex = (opcode & 0xF00) >> 8;
                         break;
                     case 0x15:
                         // DelayTimer = Vx (0xFX15)
@@ -314,8 +398,10 @@ int main(int argc, char** argv)
                         I += V[(opcode & 0xF00) >> 8];
                         break;
                     case 0x29:
-                        // (0xFX29)
+                        // Set I to Font for Vx(0xFX29)
                         //TODO
+                        I = V[(opcode & 0xF00) >> 8] + FONT_MEM_START;
+
                         break;
                     case 0x33:
                         {
@@ -332,7 +418,7 @@ int main(int argc, char** argv)
                     case 0x55:
                         {
                             // reg_dump(Vx, &I) (0xFX55)
-                            for(int i=0; i<V[(opcode & 0xF00) >> 8]; i++)
+                            for(int i=0; i<=V[(opcode & 0xF00) >> 8]; i++)
                             {
                                 Memory[I+i] = V[i];
                             }
@@ -341,7 +427,7 @@ int main(int argc, char** argv)
                     case 0x65:
                         {
                             // reg_load(Vx, &I) (0xFX65)
-                            for(int i=0; i<V[(opcode & 0xF00) >> 8]; i++)
+                            for(int i=0; i<=V[(opcode & 0xF00) >> 8]; i++)
                             {
                                 V[i] = Memory[I+i];
                             }
@@ -351,6 +437,7 @@ int main(int argc, char** argv)
                 break;
             default:
                 break;
+        }
         }
 
         std::this_thread::sleep_until(next_frame);
