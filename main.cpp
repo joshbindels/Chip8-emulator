@@ -42,73 +42,72 @@ void LoadCh8Program(const std::string& fn)
 
 void LoadFont(uint8_t* mem, int addr=0)
 {
-	for(int f: {
-		0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-		0x20, 0x60, 0x20, 0x20, 0x70, // 1
-		0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-		0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-		0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-		0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-		0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-		0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-		0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-		0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-		0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-		0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-		0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-		0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-		0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-		0xF0, 0x80, 0xF0, 0x80, 0x80  // F
-	})
-	{
-		mem[addr++] = f;
-	}
+    for(int f: {
+        0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+        0x20, 0x60, 0x20, 0x20, 0x70, // 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    })
+    {
+        mem[addr++] = f;
+    }
 }
 
 void Draw(WINDOW* win)
 {
-	wmove(win, 0, 0); 		// reset cursor
-	for(int i = 0; i<(64*32); i++)
-	{
-		waddch(win, (Display[i] == 1) ? ACS_BLOCK : ' ');
-	}
+    for(int i = 0; i<(64*32); i++)
+    {
+        waddch(win, (Display[i] == 1) ? ACS_CKBOARD : ' ');
+    }
+    wmove(win, 0, 0);       // reset cursor
 }
 
 int main(int argc, char** argv)
 {
-	initscr();
-	nodelay(stdscr, TRUE); 		// getch non-blocking
-	curs_set(0); 				// hide cursor
-	WINDOW* win = newwin(32, 64, 5, 5);
-	WINDOW* logwin = newwin(35, 70, 5, 80);
-	// Load font into RAM from address 0x00 - 0x50
-	LoadFont(Memory);
-    LoadCh8Program("IBM-logo.ch8");
-
-	auto next_frame = std::chrono::steady_clock::now();
+    initscr();
+    nodelay(stdscr, TRUE);      // getch non-blocking
+    curs_set(0);                // hide cursor
+    WINDOW* win = newwin(32, 64, 5, 5);
+    WINDOW* logwin = newwin(35, 70, 5, 80);
+    // Load font into RAM from address 0x00 - 0x50
+    LoadFont(Memory);
+    LoadCh8Program(argv[1]);
+    auto next_frame = std::chrono::steady_clock::now();
     bool drawFlag = false;
 
-	while(1)
-	{
-		next_frame += std::chrono::milliseconds(1000/60);
+    while(1)
+    {
+        next_frame += std::chrono::milliseconds(1000/60);
 
-		if(getch() == 113) { break; }
-		//box(win, 0, 0);
-		box(logwin, 0, 0);
-		wrefresh(win);
-		wrefresh(logwin);
+        if(getch() == 113) { break; }
+        box(win, 0, 0);
+        box(logwin, 0, 0);
+        wrefresh(win);
+        wrefresh(logwin);
         if(drawFlag) {
             Draw(win);
             drawFlag = false;
         }
 
 
-		uint16_t opcode = Memory[PC] << 8 | Memory[PC+1];
-		PC += 2;
-		switch(opcode & 0xF000)
-		{
-			case 0x000:
-				break;
+        uint16_t opcode = Memory[PC] << 8 | Memory[PC+1];
+        PC += 2;
+        switch(opcode & 0xF000)
+        {
+            case 0x000:
+                break;
             case 0x1000: // 1NNN Jump
                 PC = opcode & 0xFFF;
                 break;
@@ -122,6 +121,7 @@ int main(int argc, char** argv)
                 I = opcode & 0xFFF;
                 break;
             case 0xD000: // DXYN
+                {
                 uint8_t x = V[(opcode & 0xF00) >> 8] % 64;
                 uint8_t y = V[(opcode & 0x0F0) >> 4] % 32;
                 uint8_t height = opcode & 0x00F;
@@ -145,15 +145,18 @@ int main(int argc, char** argv)
                 }
                 drawFlag = true;
                 break;
-		}
+                }
+            default:
+                break;
+        }
 
-		std::this_thread::sleep_until(next_frame);
+        std::this_thread::sleep_until(next_frame);
 
-	}
+    }
 
-	delwin(win);
-	delwin(logwin);
-	endwin();
+    delwin(win);
+    delwin(logwin);
+    endwin();
 
 
     return EXIT_SUCCESS;
