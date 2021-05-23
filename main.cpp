@@ -138,7 +138,7 @@ int main(int argc, char** argv)
     bool run = true;
     while(run)
     {
-        next_frame += std::chrono::milliseconds(1000/2);
+        next_frame += std::chrono::milliseconds(1000/75);
 
         int ch;
         switch(ch = getch())
@@ -177,10 +177,10 @@ int main(int argc, char** argv)
         }
         else {
         uint16_t opcode = Memory[PC] << 8 | Memory[PC+1];
-        sprintf(logstr, "0x%x\n", opcode);
-        waddstr(logwin, logstr);
+        //sprintf(logstr, "0x%x\n", opcode);
+        //waddstr(logwin, logstr);
         PC += 2;
-        switch((opcode & 0xF000) >> 12) // MSB
+        switch((opcode & 0xF000) >> 12)
         {
             case 0x0:
                 switch(opcode & 0xFF) {
@@ -247,19 +247,19 @@ int main(int argc, char** argv)
                         break;
                     case 0x1:
                         // Vx = Vx | Vy (0x8XY1)
-                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] | V[(opcode & 0xF0) >> 4];
+                        V[(opcode & 0xF00) >> 8] |= V[(opcode & 0xF0) >> 4];
                         break;
                     case 0x2:
                         // Vx = Vx & Vy (0x8XY2)
-                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] & V[(opcode & 0xF0) >> 4];
+                        V[(opcode & 0xF00) >> 8] &= V[(opcode & 0xF0) >> 4];
                         break;
                     case 0x3:
                         // Vx = Vx ^ Vy (0x8XY3)
-                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] ^ V[(opcode & 0xF0) >> 4];
+                        V[(opcode & 0xF00) >> 8] ^= V[(opcode & 0xF0) >> 4];
                         break;
                     case 0x4:
                         // Vx += Vy (0x8XY4)
-                        if((V[(opcode & 0xF00) >> 8] += V[(opcode & 0xF0) >> 4]) > 255)
+                        if((V[(opcode & 0xF00) >> 8] + V[(opcode & 0xF0) >> 4]) > 255)
                         {
                             // set overflow bit
                             V[0xF] = 1;
@@ -272,24 +272,6 @@ int main(int argc, char** argv)
                         break;
                     case 0x5:
                         //  Vx -= Vy (0x8XY5)
-                        if((V[(opcode & 0xF00) >> 8] > V[(opcode & 0xF0) >> 4]))
-                        {
-                            // set underflow bit
-                            V[0xF] = 0;
-                        }
-                        else
-                        {
-                            V[0xF] = 1;
-                        }
-                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] - V[(opcode & 0xF0) >> 4] & 0xFF;
-                        break;
-                    case 0x6:
-                        // Vx >>= 1 (0x8XY6)
-                        V[0xF] = V[(opcode & 0xF00) >> 8] & 0x1;
-                        V[(opcode & 0xF00) >> 8] >>= 1;
-                        break;
-                    case 0x7:
-                        //  Vx = Vy - Vx (0x8XY7)
                         if((V[(opcode & 0xF0) >> 4] > V[(opcode & 0xF00) >> 8]))
                         {
                             // set underflow bit
@@ -299,11 +281,29 @@ int main(int argc, char** argv)
                         {
                             V[0xF] = 1;
                         }
-                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF0) >> 4] - V[(opcode & 0xF00) >> 8] & 0xFF;
+                        V[(opcode & 0xF00) >> 8] -= V[(opcode & 0xF0) >> 4];
+                        break;
+                    case 0x6:
+                        // Vx >>= 1 (0x8XY6)
+                        V[0xF] = V[(opcode & 0xF00) >> 8] & 0x1;
+                        V[(opcode & 0xF00) >> 8] >>= 1;
+                        break;
+                    case 0x7:
+                        //  Vx = Vy - Vx (0x8XY7)
+                        if((V[(opcode & 0xF00) >> 8] > V[(opcode & 0xF0) >> 4]))
+                        {
+                            // set underflow bit
+                            V[0xF] = 0;
+                        }
+                        else
+                        {
+                            V[0xF] = 1;
+                        }
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF0) >> 4] - V[(opcode & 0xF00) >> 8];
                         break;
                     case 0xE:
                         // Vx <<= 1 (0x8XYE)
-                        V[0xF] = V[(opcode & 0xF00) >> 8] & (1<<15);
+                        V[0xF] = (V[(opcode & 0xF00) >> 8] & 0x80) >> 7;
                         V[(opcode & 0xF00) >> 8] <<= 1;
                         break;
                 }
@@ -358,14 +358,14 @@ int main(int argc, char** argv)
                 {
                     case 0x9E:
                         // key() == Vx (0xEX9E)
-                        if(keyCurrent == V[(opcode & 0xF00) >> 8])
+                        if(translateKey(keyCurrent) == V[(opcode & 0xF00) >> 8])
                         {
                             PC += 2;
                         }
                         break;
                     case 0xA1:
                         // key() != Vx (0xEXA1)
-                        if(keyCurrent != V[(opcode & 0xF00) >> 8])
+                        if(translateKey(keyCurrent) != V[(opcode & 0xF00) >> 8])
                         {
                             PC += 2;
                         }
@@ -400,7 +400,7 @@ int main(int argc, char** argv)
                     case 0x29:
                         // Set I to Font for Vx(0xFX29)
                         //TODO
-                        I = V[(opcode & 0xF00) >> 8] + FONT_MEM_START;
+                        I = (V[(opcode & 0xF00) >> 8] * 5) + FONT_MEM_START;
 
                         break;
                     case 0x33:
@@ -418,7 +418,7 @@ int main(int argc, char** argv)
                     case 0x55:
                         {
                             // reg_dump(Vx, &I) (0xFX55)
-                            for(int i=0; i<=V[(opcode & 0xF00) >> 8]; i++)
+                            for(int i=0; i<=((opcode & 0xF00) >> 8); i++)
                             {
                                 Memory[I+i] = V[i];
                             }
@@ -427,7 +427,7 @@ int main(int argc, char** argv)
                     case 0x65:
                         {
                             // reg_load(Vx, &I) (0xFX65)
-                            for(int i=0; i<=V[(opcode & 0xF00) >> 8]; i++)
+                            for(int i=0; i<=((opcode & 0xF00) >> 8); i++)
                             {
                                 V[i] = Memory[I+i];
                             }
