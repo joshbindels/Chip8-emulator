@@ -104,48 +104,251 @@ int main(int argc, char** argv)
 
         uint16_t opcode = Memory[PC] << 8 | Memory[PC+1];
         PC += 2;
-        switch(opcode & 0xF000)
+        switch((opcode & 0xF000) >> 12) // MSB
         {
-            case 0x000:
+            case 0x0:
+                switch(opcode & 0xFF) {
+                    case 0xE0:
+                        // clear screen (0x00E0)
+                        for(int i=0; i<(64*32); i++) {
+                            Display[i] = 0;
+                        }
+                        drawFlag = true;
+                        break;
+                    case 0xEE:
+                        // return (0x00EE)
+                        PC = Stack.top();
+                        Stack.pop();
+                        break;
+                    default:
+                        // call (0x0NNN)
+                        break;
+                }
                 break;
-            case 0x1000: // 1NNN Jump
+            case 0x1:
+                // goto (0x1NNN)
                 PC = opcode & 0xFFF;
                 break;
-            case 0x6000: // 6XNN
+            case 0x2:
+                // call (0x2NNN)
+                Stack.push(PC);
+                PC = opcode & 0xFFF;
+                break;
+            case 0x3:
+                // cond eq (0x3XNN)
+                if(V[(opcode & 0xF00) >> 8] == (opcode & 0xFF))
+                {
+                    PC += 2;
+                }
+                break;
+            case 0x4:
+                //cond neq (0x4XNN)
+                if(V[(opcode & 0xF00) >> 8] != (opcode & 0xFF))
+                {
+                    PC += 2;
+                }
+                break;
+            case 0x5:
+                // cond eq register values (0x5XY0)
+                if(V[(opcode & 0xF00) >> 8] == V[(opcode & 0xF0) >> 4])
+                {
+                    PC += 2;
+                }
+                break;
+            case 0x6:
+                // set register (0x6XNN)
                 V[(opcode & 0xF00) >> 8] = opcode & 0x0FF;
                 break;
-            case 0x7000: // 7XNN
+            case 0x7:
+                // add to register (0x7XNN)
                 V[(opcode & 0xF00) >> 8] += opcode & 0x0FF;
                 break;
-            case 0xA000: // ANNN
+            case 0x8:
+                switch(opcode & 0xF) {
+                    case 0x0:
+                        // Vx = Vy (0x8XY0)
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF0) >> 4];
+                        break;
+                    case 0x1:
+                        // Vx = Vx | Vy (0x8XY1)
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] | V[(opcode & 0xF0) >> 4];
+                        break;
+                    case 0x2:
+                        // Vx = Vx & Vy (0x8XY2)
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] & V[(opcode & 0xF0) >> 4];
+                        break;
+                    case 0x3:
+                        // Vx = Vx ^ Vy (0x8XY3)
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF00) >> 8] ^ V[(opcode & 0xF0) >> 4];
+                        break;
+                    case 0x4:
+                        // Vx += Vy (0x8XY4)
+                        if((V[(opcode & 0xF00) >> 8] += V[(opcode & 0xF0) >> 4]) > 255)
+                        {
+                            // set overflow bit
+                            V[0xF] = 1;
+                        }
+                        else
+                        {
+                            V[0xF] = 0;
+                        }
+                        V[(opcode & 0xF00) >> 8] += V[(opcode & 0xF0) >> 4];
+                        break;
+                    case 0x5:
+                        //  Vx -= Vy (0x8XY5)
+                        if((V[(opcode & 0xF00) >> 8] > V[(opcode & 0xF0) >> 4]))
+                        {
+                            // set underflow bit
+                            V[0xF] = 1;
+                        }
+                        else
+                        {
+                            V[0xF] = 0;
+                        }
+                        V[(opcode & 0xF00) >> 8] -= V[(opcode & 0xF0) >> 4];
+                        break;
+                    case 0x6:
+                        // Vx >>= 1 (0x8XY6)
+                        V[0xF] = V[(opcode & 0xF00) >> 8] & 0x1;
+                        V[(opcode & 0xF00) >> 8] >>= 1;
+                        break;
+                    case 0x7:
+                        //  Vx = Vy - Vx (0x8XY7)
+                        if((V[(opcode & 0xF0) >> 4] > V[(opcode & 0xF00) >> 8]))
+                        {
+                            // set underflow bit
+                            V[0xF] = 1;
+                        }
+                        else
+                        {
+                            V[0xF] = 0;
+                        }
+                        V[(opcode & 0xF00) >> 8] = V[(opcode & 0xF0) >> 4] - V[(opcode & 0xF00) >> 8];
+                        break;
+                    case 0xE:
+                        // Vx <<= 1 (0x8XYE)
+                        V[0xF] = V[(opcode & 0xF00) >> 8] & (1<<15);
+                        V[(opcode & 0xF00) >> 8] <<= 1;
+                        break;
+                }
+                break;
+            case 0x9:
+                // Vx != Vy (0x9XY0)
+                if(V[(opcode & 0xF00) >> 8] != V[(opcode & 0xF0) >> 4])
+                {
+                    PC += 2;
+                }
+                break;
+            case 0xA:
+                // I = NNN (0xANNN)
                 I = opcode & 0xFFF;
                 break;
-            case 0xD000: // DXYN
-                {
-                uint8_t x = V[(opcode & 0xF00) >> 8] % 64;
-                uint8_t y = V[(opcode & 0x0F0) >> 4] % 32;
-                uint8_t height = opcode & 0x00F;
-                uint8_t pixel;
-                V[0xF] = 0;
+            case 0xB:
+                // PC = V0 + NNN (0xBNNN)
+                PC = V[0] + (opcode & 0xFFF);
+                break;
+            case 0xC:
+                // Vx = rand() & NN (0xCXNN)
+                V[(opcode & 0xF00) >> 8] = (rand() % 256) & (opcode & 0xFF);
+                break;
+            case 0xD:
+                { // DXYN
+                    //  draw (0xDXYN)
+                    uint8_t x = V[(opcode & 0xF00) >> 8] % 64;
+                    uint8_t y = V[(opcode & 0x0F0) >> 4] % 32;
+                    uint8_t height = opcode & 0x00F;
+                    uint8_t pixel;
+                    V[0xF] = 0;
 
-                for(int yline = 0; yline < height; yline++) {
-                    pixel = Memory[I + yline];
-                    for(int xline = 0; xline < 8; xline++) {
-                        // check byte 1 bit at a time
-                        if((pixel & (0x80 >> xline)) != 0) {
-                            // check bit for flag
-                            if(Display[(x + xline + ((y + yline) * 64))] == 1) {
-                                V[0xF] = 1;
+                    for(int yline = 0; yline < height; yline++) {
+                        pixel = Memory[I + yline];
+                        for(int xline = 0; xline < 8; xline++) {
+                            // check byte 1 bit at a time
+                            if((pixel & (0x80 >> xline)) != 0) {
+                                // check bit for flag
+                                if(Display[(x + xline + ((y + yline) * 64))] == 1) {
+                                    V[0xF] = 1;
+                                }
+                                // toggle bit
+                                Display[x + xline + ((y + yline) * 64)] ^= 1;
                             }
-                            // toggle bit
-                            Display[x + xline + ((y + yline) * 64)] ^= 1;
                         }
                     }
-
+                    drawFlag = true;
+                    break;
                 }
-                drawFlag = true;
+            case 0xE:
+                switch(opcode & 0xFF)
+                {
+                    case 0x9E:
+                        // key() == Vx (0xEX9E)
+                        //TODO
+                        break;
+                    case 0xA1:
+                        // key() != Vx (0xEXA1)
+                        //TODO
+                        break;
+                }
                 break;
+            case 0xF:
+                switch(opcode & 0xFF)
+                {
+                    case 0x07:
+                        // Vx = DelayTimer (0xFX07)
+                        V[(opcode & 0xF00) >> 8] = DelayTimer;
+                        break;
+                    case 0x0A:
+                        // (0xFX0A)
+                        // TODO
+                        break;
+                    case 0x15:
+                        // DelayTimer = Vx (0xFX15)
+                        DelayTimer = V[(opcode & 0xF00) >> 8];
+                        break;
+                    case 0x18:
+                        // Soundtimer = Vx (0xFX18)
+                        SoundTimer = V[(opcode & 0xF00) >> 8];
+                        break;
+                    case 0x1E:
+                        // I += Vx (0xFX1E)
+                        I += V[(opcode & 0xF00) >> 8];
+                        break;
+                    case 0x29:
+                        // (0xFX29)
+                        //TODO
+                        break;
+                    case 0x33:
+                        {
+                            // set BCD (0xFX33)
+                            uint8_t val = V[(opcode & 0xF00) >> 8];
+                            uint8_t one = val % 10;
+                            uint8_t ten = (val % 100)/10;
+                            uint8_t hun = (val % 1000)/100;
+                            Memory[I+0] = hun;
+                            Memory[I+1] = ten;
+                            Memory[I+2] = one;
+                            break;
+                        }
+                    case 0x55:
+                        {
+                            // reg_dump(Vx, &I) (0xFX55)
+                            for(int i=0; i<V[(opcode & 0xF00) >> 8]; i++)
+                            {
+                                Memory[I+i] = V[i];
+                            }
+                            break;
+                        }
+                    case 0x65:
+                        {
+                            // reg_load(Vx, &I) (0xFX65)
+                            for(int i=0; i<V[(opcode & 0xF00) >> 8]; i++)
+                            {
+                                V[i] = Memory[I+i];
+                            }
+                            break;
+                        }
                 }
+                break;
             default:
                 break;
         }
