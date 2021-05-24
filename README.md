@@ -17,7 +17,6 @@ To run the emulator, execute the emu binary with the Ch8 file as argument
 ```bash
 >>./emu <ch8 file>
 ```
-The test and game roms (located in the roms directory) are from [@daniel1515's AC8E repo](https://github.com/daniel5151/AC8E/tree/master/roms)
 
 
 ## License
