@@ -20,25 +20,5 @@ To run the emulator, execute the emu binary with the Ch8 file as argument
 The test and game roms (located in the roms directory) are from [@daniel1515's AC8E repo](https://github.com/daniel5151/AC8E/tree/master/roms)
 
 
-## Testing
-
-The roms directory contains 2 test binaries (SCTEST and bc_test.ch8).
-
-
-### bc_test.ch8
-bc_test passes:
-
-![bc_test result](imgs/bc_test.png)
-
-
-### SCTEST
-The SCTEST tests that do not pass are for a specific Commodore implementation
-
-![sctest result](imgs/sctest.png)
- 
-
-
-
-
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
